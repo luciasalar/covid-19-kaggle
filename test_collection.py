@@ -85,28 +85,37 @@ def test_collection(keyword_l, varname, search_keywords, filter_title1=None):
    
 
 # matching labels with test collection
-def matching_labels(file1, file2, topic_name):
+def matching_labels(annotation, test_collection, topic_name):
+    """matching existing labels with test collection"""
+
     path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_2/annotation/'
     path2 = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_2/test_collection/'
-    incu1 = pd.read_csv(path + file1)
-    incu2 = pd.read_csv(path2 + file2)
+    incu1 = pd.read_csv(path + annotation, encoding="ISO-8859-1", engine='python')
+    incu2 = pd.read_csv(path2 + test_collection, encoding="ISO-8859-1", engine='python')
 
     incu1.rename(columns={incu1.columns[0]: "textid" }, inplace = True)
     incu2.rename(columns={incu2.columns[0]: "textid" }, inplace = True)
     incu = incu1.merge(incu2, on ='textid', how='right')
-    incu.to_csv(path2 + '{}_test.csv'.format(topic_name))
-    print(incu.shape)
+    incu.to_csv(path2 + '{}_relabel.csv'.format(topic_name))
+    #print(incu.shape)
     return incu
 
 
-# collect abstracts that mention summer
-test_collection('season', 'abstract', ['summer'])
-# collect abstracts that mention mask
-test_collection('mask', 'abstract', ['mask'])
-# we only want sentences contain 'day' in incubation period related abstracts
-test_collection('incubation', 'abstract', ['day'], 'title')
-# collect abstracts mention asymptomatic and contagious
-test_collection(['asymptomatic', 'contagious'], 'abstract', ['asymptomatic'], 'title')
+if __name__ == "__main__":
+    # collect abstracts that mention summer
+    test_collection('season', 'abstract', ['summer'], 'filter')
+    # collect abstracts that mention mask
+    test_collection('mask', 'abstract', ['mask'], 'filter')
+    # we only want sentences contain 'day' in incubation period related abstracts
+    test_collection('incubation', 'abstract', ['day'], 'title')
+    # collect abstracts mention asymptomatic and contagious
+    test_collection(['asymptomatic', 'contagious'], 'abstract', ['asymptomatic'], 'title')
+
+    # matching existing labels with test collection
+
+    relabel = matching_labels('wear_mask.csv', 'test_mask.csv', 'mask')
+
+
 
 
 # path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_2/'
@@ -118,16 +127,4 @@ test_collection(['asymptomatic', 'contagious'], 'abstract', ['asymptomatic'], 't
 # test_collection.to_csv(path + 'test_collection.csv')
 
 
-#here we match the test collection with data we annotated
-# asymtomatic = matching_labels('asymtomatic.csv','test_asymptomatic.csv', 'asymtomatic')
-# incubation = matching_labels('incubation.csv','test_incubation.csv', 'incubation')
-# mask = matching_labels('wear_mask.csv','test_mask.csv', 'mask')
-# season = matching_labels('seasonality.csv','test_season.csv', 'season')
 
-
-# ### combine the test collection as one dataset
-
-# combine_test = asymtomatic.append(incubation)
-# combine_test = combine_test.append(mask)
-# combine_test = combine_test.append(season)
-# combine_test.shape

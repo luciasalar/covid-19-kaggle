@@ -1,0 +1,68 @@
+---
+title: "Evaluation_at_k"
+author: "lushi"
+date: "07/05/2020"
+output: html_document
+---
+---
+title: "plot_hmm_results"
+author: "Lushi Chen"
+date: "17 February 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(ggplot2)
+```
+
+## R Markdown
+
+This is to plot the hmm results
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+path = "/Users/lucia/phd_work/covid_project/"
+setwd(path)
+evaluation_plot <- read.csv("evaluation_plot.csv")
+
+DT.m1 = melt(evaluation_plot, measure.vars = c("dob_child1", "dob_child2", "dob_child3"),
+               variable.name = "child", value.name = "dob")
+
+#plot1 <- ggplot(evaluation_plot, aes(x=k, y=precision, linetype=metric, color=as.factor(`window`))) + 
+plot1 <- ggplot(evaluation_plot, aes(x=k, y=precision)) + 
+geom_line() +
+theme_minimal() +
+theme(legend.position="top", plot.title = element_text(hjust = 0.5)) +
+ylab("Precision / Recall (positive class)") +
+#labs(color = "window", linetype = "metric") + 
+scale_linetype_manual(values=c("solid", "dotted")) + 
+scale_colour_manual(values=c('#EA4335', '#1DA462', '#4285F4', '#fbbc05')) +
+scale_y_continuous(breaks = c(0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0), limits=c(0,1))  #ggtitle("Precision and Recall for High Sym (HMM)")
+plot1
+```
+
+
+
+```{r pressure, echo=FALSE}
+path = "~/Documents/lucia/predicting_depression_symptoms/data/results/"
+setwd(path)
+hmm_7 <- read.csv("Precision_recall_LG.csv")
+
+plot1 <- ggplot(hmm_7, aes(x=config, y=value, linetype=metric, color=as.factor(`features`))) + 
+geom_line() +
+theme_minimal() +
+theme(legend.position="top", plot.title = element_text(hjust = 0.5)) +
+ylab("Precision / Recall (High-symotom level)") +
+labs(color = "Features", linetype = "metric") + 
+scale_linetype_manual(values=c("solid", "dotted")) + 
+scale_colour_manual(values=c('#EA4335', '#1DA462', '#4285F4', '#fbbc05','#7D3C98','#2E4053')) +
+scale_y_continuous(breaks = c(40,50,60,70,80), limits=c(40,80)) +
+scale_x_continuous(breaks = c(1,2,3,4,5), limits=c(1,5)) 
+#ggtitle("Precision and Recall for Positive Class (HMM)")
+plot1
+
+```

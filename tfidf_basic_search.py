@@ -22,6 +22,7 @@ import string
 from preprocess import *
 import datetime
 import csv
+from sklearn.metrics import classification_report
 
 # # Basic search system (baseline)
 # This is a baseline search system including tfidf and cosine similarity 
@@ -37,9 +38,9 @@ class BasicSearch:
         self.search_keys = search_keys
         self.variable = varname
 
-    def load_data(self):
+    def load_data(self, filename):
         """Load meta data."""
-        dataframe = pd.read_csv(self.path + 'test_collection.csv')
+        dataframe = pd.read_csv(self.path + filename)
         return dataframe
 
     def tf_idf(self, search_keys, dataframe, varname):
@@ -168,13 +169,89 @@ class BasicSearch:
         return sel_sentence, sel_sentence_df
 
 
+class Evaluation:
+    """This class evaluates precision and recall at k"""
+
+    def __init__(self, evafile, outputname):
+        """Define varibles."""
+        self.path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_scripts/'
+        self.result = evafile
+        self.keyword = outputname
+      
+    def evaluation_k(self, sort_df, k, test_collection):
+        '''get precision and recall at k'''
+        # sort dictionary
+        top_k = sort_df.head(k)
+        top_k['system_label'] = 1
+        #top_k.rename(columns={top_k.columns[0]: "cord_uid"}, inplace = True)
+        # merge search result with all
+        test_collection['human_label'] = np.random.choice([0, 1], size=len(test_collection))
+        test_collection = test_collection[['cord_uid', 'human_label']]
+        all_label = top_k.merge(test_collection, how='outer')
+        #assign search result as 1
+        all_label['system_label'] = all_label['system_label'].fillna(0)
+        #random assign true label
+        report = classification_report(all_label['human_label'], all_label['system_label'], output_dict=True)
+        return report
+
+
+    def evaluation(self, outputname):
+        sr = BasicSearch('wear mask', 'abstract')
+        test_collection = sr.load_data()
+        result = pd.read_csv(self.path + self.result)
+        sort_df = result.sort_values(by=['cos_similarity'], ascending=False)
+
+        file_exists = os.path.isfile(self.path + '/result/evaluation_k_{}_basic.csv'.format(self.keyword))
+        f = open(path + '/result/evaluation_k_{}_basic.csv'.format(self.keyword), 'a')
+        writer_top = csv.writer(f, delimiter=',', quoting=csv.QUOTE_MINIMAL)
+        if not file_exists:
+            writer_top.writerow(['k'] + ['report'] + ['time'])
+
+        plot_precision = []
+        plot_recall = []
+        k_l = []
+        for k in range(1, 101):
+            report = self.evaluation_k(sort_df, 1, test_collection)
+
+            f = open(self.path + '/result/evaluation_k_{}_basic.csv'.format(self.keyword), 'a')
+            result_row = [[k, pd.DataFrame(report), str(datetime.datetime.now())]]
+            writer_top.writerows(result_row)
+
+            f.close()
+            plot_precision.append(report['weighted avg']['precision'])
+            plot_recall.append(report['weighted avg']['recall'])
+            k_l.append(k)
+
+        plot_result = pd.DataFrame(list(zip(plot_precision, k_l, plot_recall)))
+        plot_result.rename(columns={plot_result.columns[0]: "precision"}, inplace = True)
+        plot_result.rename(columns={plot_result.columns[1]: "k"}, inplace = True)
+        plot_result.rename(columns={plot_result.columns[2]: "recall"}, inplace = True)
+        plot_result.to_csv(path + 'result/{}.csv'.format(outputname))
+
+        return plot_result
+
 # ### Now we retrieve the data for baseline model
 
 # In[102]:
 
+if __name__ == "__main__":
+    #s = BasicSearch('wear mask', 'abstract') #enter query
+    #result = s.extract_relevant_sentences(['mask']) #extract sentence contain this keyword
 
-# s = BasicSearch('wear mask', 'abstract') #enter query
-# result = s.extract_relevant_sentences(['mask']) #extract sentence contain this keyword
+    sr = BasicSearch('wear mask', 'abstract')
+    test_collection = sr.load_data()
+    search_query_weights, tfidf_weights_matrix = sr.tf_idf(sr.search_keys, test_collection, 'abstract')
+    similarity_list = sr.cos_similarity(search_query_weights, tfidf_weights_matrix)
+    #here we obtain cosine similarity > 0
+    c = sr.most_similar(test_collection, similarity_list)
+    c.to_csv(sr.path + 'test.csv')
+
+
+    path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_scripts/'
+    eva = Evaluation('test.csv', 'mask2')
+    plot_result = eva.evaluation('plot_eva_basic.csv')
+
+
 
 
 # # In[103]:
@@ -199,37 +276,6 @@ class BasicSearch:
 
 
 # # ## matching labeled data to baseline result
-
-# # In[103]:
-
-
-# def matching_labels(file1, file2, topic_name):
-#     path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_2/annotation/'
-#     path2 = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_2/search_results/'
-#     incu1 = pd.read_csv(path + file1)
-#     incu2 = pd.read_csv(path2 + file2)
-
-#     incu1.rename(columns={incu1.columns[0]: "textid" }, inplace = True)
-#     incu2.rename(columns={incu2.columns[0]: "textid" }, inplace = True)
-#     incu = incu1.merge(incu2, on ='textid', how='right')
-#     incu.to_csv(path2 + '{}_adjusted.csv'.format(topic_name))
-#     print(incu.shape)
-
-
-# # In[101]:
-
-
-# # incubation
-# matching_labels('incubation.csv', 'tfidf_incubation.csv', 'incubation')
-
-
-# # In[104]:
-
-
-# matching_labels('asymptomatic.csv', 'tfidf_asymptomatic.csv', 'asymptomatic')
-
-
-# In[ ]:
 
 
 

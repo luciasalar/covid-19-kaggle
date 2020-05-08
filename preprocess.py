@@ -34,10 +34,18 @@ class MetaData:
         mydict = lambda: defaultdict(mydict)
         meta_data_dict = mydict()
 
-        for cord_uid, abstract, title, sha in zip(self.meta_data['cord_uid'], self.meta_data['abstract'], self.meta_data['title'], self.meta_data['sha']):
-            meta_data_dict[cord_uid]['title'] = title
-            meta_data_dict[cord_uid]['abstract'] = abstract
-            meta_data_dict[cord_uid]['sha'] = sha
+        if 'cos_similarity' in self.meta_data.columns:
+            for cord_uid, abstract, title, sha, cos in zip(self.meta_data['cord_uid'], self.meta_data['abstract'], self.meta_data['title'], self.meta_data['sha'], self.meta_data['cos_similarity']):
+                meta_data_dict[cord_uid]['title'] = title
+                meta_data_dict[cord_uid]['abstract'] = abstract
+                meta_data_dict[cord_uid]['sha'] = sha
+                meta_data_dict[cord_uid]['cos_similarity'] = cos
+
+        else: 
+            for cord_uid, abstract, title, sha in zip(self.meta_data['cord_uid'], self.meta_data['abstract'], self.meta_data['title'], self.meta_data['sha']):
+                meta_data_dict[cord_uid]['title'] = title
+                meta_data_dict[cord_uid]['abstract'] = abstract
+                meta_data_dict[cord_uid]['sha'] = sha
 
         return meta_data_dict
 
@@ -73,13 +81,21 @@ class ExtractText:
         """Simple text process: lower case only. """
         mydict = lambda: defaultdict(mydict)
         cleaned = mydict()
-        for k, v in self.metadata.items():
-            sent = v[self.variable]
-            sent = str(sent)
-            #sent = str(sent).lower()
-            cleaned[k]['processed_text'] = sent
-            cleaned[k]['sha'] = v['sha']
-            cleaned[k]['title'] = v['title']
+        # check if there's cosine similarity, we need to include it
+        if 'cos_similarity' in self.metadata[list(self.metadata.keys())[0]].keys():
+            for k, v in self.metadata.items():
+                sent = v[self.variable]
+                sent = str(sent)
+                cleaned[k]['processed_text'] = sent
+                cleaned[k]['sha'] = v['sha']
+                cleaned[k]['title'] = v['title']
+                cleaned[k]['cos_similarity'] = v['cos_similarity']
+
+        else:
+            for k, v in self.metadata.items():
+                cleaned[k]['processed_text'] = sent
+                cleaned[k]['sha'] = v['sha']
+                cleaned[k]['title'] = v['title']
 
         return cleaned
      
@@ -106,19 +122,22 @@ class ExtractText:
         mydict = lambda: defaultdict(mydict)
         selected = mydict()
         textdict = self.very_simple_preprocess()
-        
-        for k, v in textdict.items():
-            if ps.stem(str(self.keyword)) in ps.stem(str(v['processed_text'].split())):
-                if 'cos_similarity' in v.keys():       
+        # check if there's cosine similarity, we need to include it
+        if 'cos_similarity' in self.metadata[list(self.metadata.keys())[0]].keys():
+            for k, v in textdict.items():
+                if ps.stem(str(self.keyword)) in ps.stem(str(v['processed_text'].split())):
+                   # print('yes')    
                     selected[k]['processed_text'] = v['processed_text']
                     selected[k]['sha'] = v['sha']
                     selected[k]['title'] = v['title']
                     selected[k]['cos_similarity'] = v['cos_similarity']
             #keywords are stemmed before matching
             else:
-                selected[k]['processed_text'] = v['processed_text']
-                selected[k]['sha'] = v['sha']
-                selected[k]['title'] = v['title']
+                if ps.stem(str(self.keyword)) in ps.stem(str(v['processed_text'].split())):
+                    selected[k]['processed_text'] = v['processed_text']
+                    selected[k]['sha'] = v['sha']
+                    selected[k]['title'] = v['title']
+                    
         return selected
     
     def extract_w_keywords_punc_multiplew(self, keyword_l):
@@ -127,6 +146,7 @@ class ExtractText:
         mydict = lambda: defaultdict(mydict)
         selected = mydict()
         textdict = self.very_simple_preprocess()
+
  
         for k, v in textdict.items():
             for keyw in keyword_l:

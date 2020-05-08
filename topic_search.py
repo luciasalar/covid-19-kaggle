@@ -16,6 +16,7 @@ from sklearn.metrics import cohen_kappa_score
 from nltk.tokenize import word_tokenize
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics import classification_report
 import numpy as np
 from collections import defaultdict
 import string
@@ -24,6 +25,7 @@ import datetime
 import csv
 from tfidf_basic_search import *
 import gc
+import os
 
 
 
@@ -118,11 +120,11 @@ def selected_best_LDA(path, data, keyword, varname, num_topic):
         text = et.get_noun_verb2(text1)
 
         # optimized alpha and beta
-        alpha = [0.1, 0.3, 0.5, 0.7, 0.9]
-        beta = [0.1, 0.3, 0.5, 0.7, 0.9]
+        # alpha = [0.1, 0.3, 0.5, 0.7, 0.9]
+        # beta = [0.1, 0.3, 0.5, 0.7, 0.9]
 
-        # alpha = [0.3, 0.9]
-        # beta = [0.3, 0.9]
+        alpha = [0.3]
+        beta = [0.3]
 
         mydict = lambda: defaultdict(mydict)
         cohere_dict = mydict()
@@ -182,7 +184,7 @@ def select_text_from_LDA_results(file, keyword, varname, scores_best, topic_num)
                 selected[k]['title'] = v['title']
                 selected[k]['processed_text'] = v['processed_text']
                 selected[k]['sha'] = v['sha']
-                print(v['cos_similarity'])
+                #print(v['cos_similarity'])
                 selected[k]['cosine_similarity'] = v['cos_similarity']
 
         print ("There are {} abstracts selected". format(len(selected)))
@@ -243,48 +245,112 @@ def store_extract_sentences(sel_sentence, search_keywords):
 #here we select the best LDA model  # keywords, search text, number of topic
 
 
+#path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_scripts/'
+
+# sr = BasicSearch('wear mask', 'abstract')
+# test_collection = sr.load_data('test_collection.csv')
+# # #search_query_weights, tfidf_weights_matrix = sr.tf_idf(sr.search_keys, test_collection, 'abstract')
+# # similarity_list = sr.cos_similarity(search_query_weights, tfidf_weights_matrix)
+
+# # #here we obtain cosine similarity > 0
+# # c = sr.most_similar(test_collection, similarity_list)
+# # c.to_csv(sr.path + 'test.csv')
+
+# scores_best_mask = selected_best_LDA(path, 'test.csv', 'mask', 'abstract', 15)
+
+# # # topic number 1， 10 are the most relevant to public wearing mask
+# # which topic do you think is most relevant to your search
+# cor_dict_mask = select_text_from_LDA_results('test.csv', 'mask', 'abstract', scores_best_mask, 1)
+# cor_dict_mask2 = select_text_from_LDA_results('test.csv', 'mask', 'abstract', scores_best_mask, 10)
+# cor_dict_mask.update(cor_dict_mask2)
+# cor_dict_df = pd.DataFrame.from_dict(cor_dict_mask, orient='index')
+# cor_dict_df.to_csv(path + 'test_selected.csv')
+
+
+class Evaluation:
+    """This class evaluates precision and recall at k"""
+
+    def __init__(self, evafile, outputname):
+        """Define varibles."""
+        self.path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_scripts/'
+        self.result = evafile
+        self.keyword = outputname
+      
+    def evaluation_k(self, sort_df, k, test_collection):
+        '''get precision and recall at k'''
+        # sort dictionary
+        top_k = sort_df.head(k)
+        top_k['system_label'] = 1
+        top_k.rename(columns={top_k.columns[0]: "cord_uid"}, inplace = True)
+        # merge search result with all
+        #test_collection['human_label'] = np.random.choice([0, 1], size=len(test_collection))
+        test_collection = test_collection[['cord_uid', 'relevance']]
+        all_label = top_k.merge(test_collection, how='outer')
+
+        #assign search result as 1
+        all_label['system_label'] = all_label['system_label'].fillna(0)
+        all_label.to_csv(self.path + 'testing.csv')
+        #get classification report
+        report = classification_report(all_label['relevance'], all_label['system_label'], output_dict=True)
+        return report
+
+
+    def evaluation(self, filename):
+        sr = BasicSearch('wear mask', 'abstract')
+        test_collection = sr.load_data(filename)
+        result = pd.read_csv(self.path + self.result)
+        sort_df = result.sort_values(by=['cosine_similarity'], ascending=False)
+
+        file_exists = os.path.isfile(self.path + '/result/evaluation_k_{}.csv'.format(self.keyword))
+        f = open(path + '/result/evaluation_k_{}.csv'.format(self.keyword), 'a')
+        writer_top = csv.writer(f, delimiter=',', quoting=csv.QUOTE_MINIMAL)
+        if not file_exists:
+            writer_top.writerow(['k'] + ['report'] + ['time'])
+
+        plot_precision = []
+        plot_recall = []
+        k_l = []
+        for k in range(1, 101):
+            report = self.evaluation_k(sort_df, k, test_collection)
+
+            f = open(self.path + '/result/evaluation_k_{}.csv'.format(self.keyword), 'a')
+            result_row = [[k, pd.DataFrame(report), str(datetime.datetime.now())]]
+            writer_top.writerows(result_row)
+
+            f.close()
+            plot_precision.append(report['weighted avg']['precision'])
+            plot_recall.append(report['weighted avg']['recall'])
+            k_l.append(k)
+
+        plot_result = pd.DataFrame(list(zip(plot_precision, k_l, plot_recall)))
+        plot_result.rename(columns={plot_result.columns[0]: "precision"}, inplace=True)
+        plot_result.rename(columns={plot_result.columns[1]: "k"}, inplace=True)
+        plot_result.rename(columns={plot_result.columns[2]: "recall"}, inplace=True)
+        plot_result.to_csv(path + 'result/evaluation_plot{}.csv'.format(self.keyword))
+
+        return plot_result
+
+
+
 path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_scripts/'
-
-sr = BasicSearch('wear mask', 'abstract')
-test_collection = sr.load_data()
-# search_query_weights, tfidf_weights_matrix = sr.tf_idf(sr.search_keys, df, 'abstract')
-# similarity_list = sr.cos_similarity(search_query_weights, tfidf_weights_matrix)
-
-# #here we obtain the top n most similar 
-# c = sr.most_similar(df, similarity_list)
-# c.to_csv(sr.path + 'test.csv')
-
-scores_best_mask = selected_best_LDA(path, 'test.csv', 'mask', 'abstract', 15)
-
-# # topic number 1， 10 are the most relevant to public wearing mask
-# which topic do you think is most relevant to your search
-cor_dict_mask = select_text_from_LDA_results('test.csv', 'mask', 'abstract', scores_best_mask, 1)
-cor_dict_mask2 = select_text_from_LDA_results('test.csv', 'mask', 'abstract', scores_best_mask, 10)
-cor_dict_mask.update(cor_dict_mask2)
-cor_dict_df = pd.DataFrame.from_dict(cor_dict_mask, orient='index')
-cor_dict_df.to_csv(sr.path + 'test_selected.csv')
+eva = Evaluation('test_selected.csv', 'mask2')
+plot_result = eva.evaluation('test_collection/labels/test_collection_wear_mask.csv')
 
 
-def evaluation_k(result, k, test_collection):
-    '''get precision and recall at k'''
-    # sort dictionary
-    sort_df = result.sort_values(by=['cos_similarity'], ascending=False)
-    top_k  = sort_df.head(k)
-    top_k['system_label'] = 1
-    # merge search result with all
-    all_label = top_k.merge(test_collection, how = 'inner')
-    #assign search result as 1
-    all_label['system_label']
-    #random assign true label
-    report = classification_report(top_k['human'], top_k['machine'], output_dict=True)
 
-# m = MetaData('test.csv')
-# metaDict = m.data_dict()
+# we need a graph for the results, we'll plot it with R
 
-# # process text and extract text with keywords
-# et = ExtractText(metaDict, 'mask', 'abstract')
-# # extract text together with punctuation
-# text1 = et.extract_w_keywords_punc()
+# we also need a tfidf evaluation =
+
+
+# sr = BasicSearch('wear mask', 'abstract')
+# test_collection = sr.load_data('test_collection.csv')
+# result = pd.read_csv(eva.path + eva.result)
+# sort_df = result.sort_values(by=['cosine_similarity'], ascending=False)
+# report = eva.evaluation_k(sort_df, 1, test_collection)
+
+
+
 
 
 

@@ -461,12 +461,12 @@ def extract_relevant_sentences(cor_dict, search_keywords):
 
 
 
-scores_best = selected_best_LDA('asymptomatic', 'abstract')
+scores_best = selected_best_LDA('infectious', 'abstract')
 # topic number 1 is most relevant to public wearing mask
 # which topic do you think is most relevant to your search
-cor_dict = select_text_from_LDA_results('asymptomatic', 'abstract', scores_best, 19)
+#cor_dict = select_text_from_LDA_results('asymptomatic', 'abstract', scores_best, 19)
 # # extract relevant sentences  #search keywords can be a list
-sel_sentence = extract_relevant_sentences(cor_dict, ['asymptomatic'])
+#sel_sentence = extract_relevant_sentences(cor_dict, ['asymptomatic'])
 
 
 
