@@ -26,6 +26,7 @@ import csv
 from tfidf_basic_search import *
 import gc
 import os
+from topic_model import *
 
 
 
@@ -84,7 +85,7 @@ class LDATopic:
         all_lda_score_dfT = all_lda_score_df.T
         all_lda_score_dfT = all_lda_score_dfT.fillna(0)
 
-        return model, coherence, all_lda_score_dfT
+        return model, coherence, all_lda_score_dfT, bow_corpus
 
     def get_ids_from_selected(self, text):
         """Get unique id from text """
@@ -97,41 +98,43 @@ class LDATopic:
 
 
 
+
 # Now we extract articles contain the most relevant topic
 
-def selected_best_LDA(path, data, keyword, varname, num_topic):
+def selected_best_LDA(path, data, varname, num_topic):
         """Select the best lda model with extracted text """
         # convert data to dictionary format
         file_exists = os.path.isfile(path + 'result/lda_result.csv')
         f = open(path + 'result/lda_result.csv', 'a')
         writer_top = csv.writer(f, delimiter=',', quoting=csv.QUOTE_MINIMAL)
         if not file_exists:
-            writer_top.writerow(['a'] + ['b'] + ['coherence'] + ['time'] +['topics'] )
+            writer_top.writerow(['a'] + ['b'] + ['coherence'] + ['time'] +['topics'] + ['num_topics'] )
 
         m = MetaData(data)
         metaDict = m.data_dict()
 
         #process text and extract text with keywords
-        et = ExtractText(metaDict, keyword, varname)
-        text1 = et.extract_w_keywords()
+        et = ExtractText(metaDict, 'anything', varname) #doesn't matter
+        text1 = et.simple_preprocess()
 
+        #text1 = et.extract_w_keywords()
 
         # extract nouns, verbs and adjetives
         text = et.get_noun_verb2(text1)
 
         # optimized alpha and beta
-        # alpha = [0.1, 0.3, 0.5, 0.7, 0.9]
-        # beta = [0.1, 0.3, 0.5, 0.7, 0.9]
+        alpha = [0.1, 0.3, 0.5, 0.7, 0.9]
+        beta = [0.1, 0.3, 0.5, 0.7, 0.9]
 
-        alpha = [0.3]
-        beta = [0.3]
+        # alpha = [0.3]
+        # beta = [0.3]
 
         mydict = lambda: defaultdict(mydict)
         cohere_dict = mydict()
         for a in alpha:
             for b in beta:
                 lda = LDATopic(text, num_topic, a, b)
-                model, coherence, scores = lda.topic_modeling()
+                model, coherence, scores, corpus = lda.topic_modeling()
                 cohere_dict[coherence]['a'] = a
                 cohere_dict[coherence]['b'] = b
 
@@ -144,27 +147,107 @@ def selected_best_LDA(path, data, keyword, varname, num_topic):
         
         # run LDA with the optimized values
         lda = LDATopic(text, num_topic, a, b)
-        model, coherence, scores_best = lda.topic_modeling()
+        model, coherence, scores_best, corpus = lda.topic_modeling()
         #pprint(model.print_topics())
 
         #f = open(path + 'result/lda_result.csv', 'a')
-        result_row = [[a, b, coherence, str(datetime.datetime.now()), model.print_topics()]]
+        result_row = [[a, b, coherence, str(datetime.datetime.now()), model.print_topics(), num_topic]]
         writer_top.writerows(result_row)
 
         f.close()
         gc.collect()
-    
-        # select merge ids with the LDA topic scores
+       
+        # select merge ids with the LDA topic scores 
+        # store result model with the best score
         id_l = lda.get_ids_from_selected(text)
-        scores_best['cord_uid'] = id_l
+        scores_best['cord_uid'] = id_l 
 
+        # get topic dominance
+        t = LDATopicModel()
+        df_topic_sents_keywords = t.format_topics_sentences(model, corpus)
+        df_dominant_topic = df_topic_sents_keywords.reset_index()
+        #print(df_dominant_topic.shape)
 
-        return scores_best
+        sent_topics_df = pd.concat([df_dominant_topic, scores_best], axis=1)
+        #sent_topics_df = sent_topics_df[['Dominant_Topic', 'Perc_Contribution', 'Topic_Keywords']]
+
+        return sent_topics_df
+        
+
+def selected_best_LDA_allw(path, data, varname, num_topic):
+        """Select the best lda model with extracted text """
+        # convert data to dictionary format
+        file_exists = os.path.isfile(path + 'result/lda_result.csv')
+        f = open(path + 'result/lda_result.csv', 'a')
+        writer_top = csv.writer(f, delimiter=',', quoting=csv.QUOTE_MINIMAL)
+        if not file_exists:
+            writer_top.writerow(['a'] + ['b'] + ['coherence'] + ['time'] +['topics'] + ['num_topics'] )
+
+        m = MetaData(data)
+        metaDict = m.data_dict()
+
+        #process text and extract text with keywords
+        et = ExtractText(metaDict, 'anything', varname) #doesn't matter
+        text = et.simple_preprocess()
+
+       
+        text = et.preprocess_cluster_sentence(text)
+
+        # optimized alpha and beta
+        # alpha = [0.1, 0.3, 0.5, 0.7, 0.9]
+        # beta = [0.1, 0.3, 0.5, 0.7, 0.9]
+
+        alpha = [0.1]
+        beta = [0.1]
+
+        mydict = lambda: defaultdict(mydict)
+        cohere_dict = mydict()
+        for a in alpha:
+            for b in beta:
+                lda = LDATopic(text, num_topic, a, b)
+                model, coherence, scores, corpus = lda.topic_modeling()
+                cohere_dict[coherence]['a'] = a
+                cohere_dict[coherence]['b'] = b
+
+                
+        # sort result dictionary to identify the best a, b
+        # select a,b with the largest coherence score 
+        sort = sorted(cohere_dict.keys())[0] 
+        a = cohere_dict[sort]['a']
+        b = cohere_dict[sort]['b']
+        
+        # run LDA with the optimized values
+        lda = LDATopic(text, num_topic, a, b)
+        model, coherence, scores_best, corpus = lda.topic_modeling()
+        #pprint(model.print_topics())
+
+        #f = open(path + 'result/lda_result.csv', 'a')
+        result_row = [[a, b, coherence, str(datetime.datetime.now()), model.print_topics(), num_topic]]
+        writer_top.writerows(result_row)
+
+        f.close()
+        gc.collect()
+       
+        # select merge ids with the LDA topic scores 
+        # store result model with the best score
+        id_l = lda.get_ids_from_selected(text)
+        scores_best['cord_uid'] = id_l 
+
+        # get topic dominance
+        t = LDATopicModel()
+        df_topic_sents_keywords = t.format_topics_sentences(model, corpus)
+        df_dominant_topic = df_topic_sents_keywords.reset_index()
+        #print(df_dominant_topic.shape)
+
+        sent_topics_df = pd.concat([df_dominant_topic, scores_best], axis=1)
+        #sent_topics_df = sent_topics_df[['Dominant_Topic', 'Perc_Contribution', 'Topic_Keywords']]
+
+        return sent_topics_df
 
 
 
 # here we select the text with the most relevant topic according to the LDA result
-def select_text_from_LDA_results(file, keyword, varname, scores_best, topic_num):
+def select_text_from_LDA_results(file, keyword, varname, scores_best):
         # choose papers with the most relevant topic
         # convert data to dictionary format
         m = MetaData(file)
@@ -173,10 +256,13 @@ def select_text_from_LDA_results(file, keyword, varname, scores_best, topic_num)
         # process text and extract text with keywords
         et = ExtractText(metaDict, keyword, varname)
         # extract text together with punctuation
-        text1 = et.extract_w_keywords_punc()
+        #text1 = et.extract_w_keywords_punc()
+        text1 = et.very_simple_preprocess()
         # need to decide which topic to choose after training
-        sel = scores_best[scores_best[topic_num] > 0] 
+        #sel = scores_best[scores_best[topic_num] > 0] 
+        sel = scores_best
         
+        count = 0
         mydict = lambda: defaultdict(mydict)
         selected = mydict()
         for k, v in text1.items():
@@ -184,8 +270,16 @@ def select_text_from_LDA_results(file, keyword, varname, scores_best, topic_num)
                 selected[k]['title'] = v['title']
                 selected[k]['processed_text'] = v['processed_text']
                 selected[k]['sha'] = v['sha']
-                #print(v['cos_similarity'])
                 selected[k]['cosine_similarity'] = v['cos_similarity']
+
+                # get topic dominance
+                percent = sel.loc[sel.cord_uid == k, 'Perc_Contribution']
+                dominance = sel.loc[sel.cord_uid == k, 'Dominant_Topic']
+                #print(percent[percent.index[0]])
+
+                selected[k]['Perc_Contribution'] = percent[percent.index[0]]
+                selected[k]['Dominant_Topic'] = dominance[dominance.index[0]]
+
 
         print ("There are {} abstracts selected". format(len(selected)))
         return selected
@@ -196,7 +290,7 @@ def extract_relevant_sentences(cor_dict, search_keywords, filter_title=None):
 
     mydict = lambda: defaultdict(mydict)
     sel_sentence = mydict()
-    filter_w = ['covid19','ncov','2019-ncov','covid-19','sars-cov','wuhan']
+    filter_w = ['covid19', '2019-ncov', 'covid-19', 'sars-cov-2', 'wuhan']
     
     for k, v in cor_dict.items():
         keyword_sentence = []
@@ -212,14 +306,17 @@ def extract_relevant_sentences(cor_dict, search_keywords, filter_title=None):
         if not keyword_sentence:
             pass
         elif filter_title is not None:
-            for f in filter_w:
-                title = v['title'].lower().translate(str.maketrans('', '', string.punctuation))
-                abstract = v['processed_text'].lower().translate(str.maketrans('', '', string.punctuation))
+            title = v['title'].lower().translate(str.maketrans('', '', string.punctuation))
+            abstract = v['processed_text'].lower().translate(str.maketrans('', '', string.punctuation))
+            for f in filter_w:                
                 if (f in title) or (f in abstract):
+                    print('y')
                     sel_sentence[k]['sentences'] = keyword_sentence
                     sel_sentence[k]['sha'] = v['sha']
                     sel_sentence[k]['title'] = v['title']
                     sel_sentence[k]['cosine_similarity'] = v['cos_similarity']
+                else:
+                    print('n')
 
         else:
             sel_sentence[k]['sentences'] = keyword_sentence
@@ -239,33 +336,6 @@ def store_extract_sentences(sel_sentence, search_keywords):
     return sel_sentence_df
 
 
-# ## Question 1: Is wearing mask an effective way to control pandemic?
-
-# now we run topic search on teh test collection
-#here we select the best LDA model  # keywords, search text, number of topic
-
-
-#path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_scripts/'
-
-# sr = BasicSearch('wear mask', 'abstract')
-# test_collection = sr.load_data('test_collection.csv')
-# # #search_query_weights, tfidf_weights_matrix = sr.tf_idf(sr.search_keys, test_collection, 'abstract')
-# # similarity_list = sr.cos_similarity(search_query_weights, tfidf_weights_matrix)
-
-# # #here we obtain cosine similarity > 0
-# # c = sr.most_similar(test_collection, similarity_list)
-# # c.to_csv(sr.path + 'test.csv')
-
-# scores_best_mask = selected_best_LDA(path, 'test.csv', 'mask', 'abstract', 15)
-
-# # # topic number 1， 10 are the most relevant to public wearing mask
-# # which topic do you think is most relevant to your search
-# cor_dict_mask = select_text_from_LDA_results('test.csv', 'mask', 'abstract', scores_best_mask, 1)
-# cor_dict_mask2 = select_text_from_LDA_results('test.csv', 'mask', 'abstract', scores_best_mask, 10)
-# cor_dict_mask.update(cor_dict_mask2)
-# cor_dict_df = pd.DataFrame.from_dict(cor_dict_mask, orient='index')
-# cor_dict_df.to_csv(path + 'test_selected.csv')
-
 
 class Evaluation:
     """This class evaluates precision and recall at k"""
@@ -273,6 +343,8 @@ class Evaluation:
     def __init__(self, evafile, outputname):
         """Define varibles."""
         self.path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_scripts/'
+        #self.path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_2/'
+        self.path2 = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_2/'
         self.result = evafile
         self.keyword = outputname
       
@@ -280,14 +352,16 @@ class Evaluation:
         '''get precision and recall at k'''
         # sort dictionary
         top_k = sort_df.head(k)
+        #assign search result as 1
         top_k['system_label'] = 1
-        top_k.rename(columns={top_k.columns[0]: "cord_uid"}, inplace = True)
-        # merge search result with all
-        #test_collection['human_label'] = np.random.choice([0, 1], size=len(test_collection))
+        if 'cord_uid' not in top_k.columns:
+            top_k.rename(columns={top_k.columns[0]: "cord_uid"}, inplace = True)
+
+        #merge search result with test collection
         test_collection = test_collection[['cord_uid', 'relevance']]
         all_label = top_k.merge(test_collection, how='outer')
 
-        #assign search result as 1
+        #assign not relevant as 0
         all_label['system_label'] = all_label['system_label'].fillna(0)
         all_label.to_csv(self.path + 'testing.csv')
         #get classification report
@@ -295,113 +369,297 @@ class Evaluation:
         return report
 
 
-    def evaluation(self, filename):
+    def evaluation(self, lda_results, search_results, searchfilename, search_var, filename, datatype, topic_num):
+        """Wrapping evaluation function in loop. """ #filename: annotation file
+
+        cor_dict_mask = select_text_from_LDA_results(search_results, searchfilename, search_var, lda_results)
+
+        result = pd.DataFrame.from_dict(cor_dict_mask, orient='index')
+        result['cord_uid'] = result.index
+        path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_2/search_results/'
+        result.to_csv(path + 'test_selected.csv')
+
         sr = BasicSearch('wear mask', 'abstract')
         test_collection = sr.load_data(filename)
-        result = pd.read_csv(self.path + self.result)
-        sort_df = result.sort_values(by=['cosine_similarity'], ascending=False)
+
+        #select target topic
+        res = []
+        for num in topic_num:
+            sel_result = result[result['Dominant_Topic'] == num]
+            res.append(sel_result)
+
+        result = pd.concat(res)
+
+        
+        if 'cosine_similarity' in result.columns:
+            sort_df = result.sort_values(by=['cosine_similarity', 'Perc_Contribution'], ascending=[False, False])
+        else:
+            sort_df = result.sort_values(by=['cos_similarity', 'Perc_Contribution'], ascending=[False, False])
+
+        #df.sort_values(['age', 'grade'], ascending=[True, False])
+        result = sort_df
+        
+        result.to_csv(self.path2 + 'search_results/{}_temp_eva.csv'.format(searchfilename))
+        size = result.shape[0]
 
         file_exists = os.path.isfile(self.path + '/result/evaluation_k_{}.csv'.format(self.keyword))
-        f = open(path + '/result/evaluation_k_{}.csv'.format(self.keyword), 'a')
+        f = open(self.path + '/result/evaluation_k_{}.csv'.format(self.keyword), 'a')
         writer_top = csv.writer(f, delimiter=',', quoting=csv.QUOTE_MINIMAL)
         if not file_exists:
             writer_top.writerow(['k'] + ['report'] + ['time'])
 
         plot_precision = []
         plot_recall = []
+        f1 = []
         k_l = []
-        for k in range(1, 101):
-            report = self.evaluation_k(sort_df, k, test_collection)
+        for k in range(1, size+1):
+            report = self.evaluation_k(result, k, test_collection)
 
             f = open(self.path + '/result/evaluation_k_{}.csv'.format(self.keyword), 'a')
             result_row = [[k, pd.DataFrame(report), str(datetime.datetime.now())]]
             writer_top.writerows(result_row)
 
             f.close()
-            plot_precision.append(report['weighted avg']['precision'])
-            plot_recall.append(report['weighted avg']['recall'])
+            plot_precision.append(report['macro avg']['precision'])
+            plot_recall.append(report['macro avg']['recall'])
+            f1.append(report['macro avg']['f1-score'])
             k_l.append(k)
 
-        plot_result = pd.DataFrame(list(zip(plot_precision, k_l, plot_recall)))
-        plot_result.rename(columns={plot_result.columns[0]: "precision"}, inplace=True)
-        plot_result.rename(columns={plot_result.columns[1]: "k"}, inplace=True)
+        plot_result = pd.DataFrame(list(zip(k_l, plot_precision, plot_recall, f1)))
+        plot_result.rename(columns={plot_result.columns[1]: "precision"}, inplace=True)
+        plot_result.rename(columns={plot_result.columns[0]: "k"}, inplace=True)
         plot_result.rename(columns={plot_result.columns[2]: "recall"}, inplace=True)
-        plot_result.to_csv(path + 'result/evaluation_plot{}.csv'.format(self.keyword))
+        plot_result.rename(columns={plot_result.columns[3]: "f1_score"}, inplace=True)
+        plot_result.to_csv(self.path + 'result/evaluation_plot_{}_{}.csv'.format(self.keyword, datatype))
+
+        return plot_result, result
+
+
+    def evaluation_sent_cluster(self, lda_results, search_results, searchfilename, search_var, filename, datatype, topic_num):
+        """Wrapping evaluation function in loop.
+        filename: annotation file
+        topic_num: topics that you need to remove 
+        datatype: distinguisted the outputfile name, is it tfidf or topic
+        """ 
+        
+        cor_dict_mask = select_text_from_LDA_results(search_results, searchfilename, search_var, lda_results)
+
+        result = pd.DataFrame.from_dict(cor_dict_mask, orient='index')
+        result['cord_uid'] = result.index
+        path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_2/search_results/'
+        result.to_csv(path + 'test_selected.csv')
+
+        sr = BasicSearch('wear mask', 'abstract')
+        test_collection = sr.load_data(filename)
+        
+        #select target topic and put them at the back, here we want to put the dominant topics at the back
+        result = result.sort_values(by=['Perc_Contribution'], ascending=[True])
+        print(result.columns)
+
+        res = []
+        for num in topic_num:
+            sel_result = result[result['Dominant_Topic'] == num]
+            res.append(sel_result)
+        poor_result = pd.concat(res)
+
+        result = result.sort_values(by=['Perc_Contribution'], ascending=[False])
+
+        result = result.append(poor_result)
+        result = result.drop_duplicates(subset='cord_uid', keep="last")
+
+        result.to_csv(self.path2 + 'search_results/{}_temp_eva_sent.csv'.format(searchfilename))
+        size = result.shape[0]
+
+        file_exists = os.path.isfile(self.path + '/result/evaluation_k_sent_{}.csv'.format(self.keyword))
+        f = open(self.path + '/result/evaluation_k_sent{}.csv'.format(self.keyword), 'a')
+        writer_top = csv.writer(f, delimiter=',', quoting=csv.QUOTE_MINIMAL)
+        if not file_exists:
+            writer_top.writerow(['k'] + ['report'] + ['time'])
+
+        plot_precision = []
+        plot_recall = []
+        f1 = []
+        k_l = []
+        for k in range(1, size + 1):
+            report = self.evaluation_k(result, k, test_collection)
+
+            f = open(self.path + '/result/evaluation_k_sent_{}.csv'.format(self.keyword), 'a')
+            result_row = [[k, pd.DataFrame(report), str(datetime.datetime.now())]]
+            writer_top.writerows(result_row)
+
+            f.close()
+            plot_precision.append(report['macro avg']['precision'])
+            plot_recall.append(report['macro avg']['recall'])
+            f1.append(report['macro avg']['f1-score'])
+            k_l.append(k)
+
+        plot_result = pd.DataFrame(list(zip(k_l, plot_precision, plot_recall, f1)))
+        plot_result.rename(columns={plot_result.columns[1]: "precision"}, inplace=True)
+        plot_result.rename(columns={plot_result.columns[0]: "k"}, inplace=True)
+        plot_result.rename(columns={plot_result.columns[2]: "recall"}, inplace=True)
+        plot_result.rename(columns={plot_result.columns[3]: "f1_score"}, inplace=True)
+        plot_result.to_csv(self.path + 'result/evaluation_plot_{}_{}_sent.csv'.format(self.keyword, datatype))
+
+        return plot_result, result
+
+    def evaluation_tfidf(self, lda_results, search_results, searchfilename, search_var, filename, datatype):
+        """Wrapping evaluation function in loop. """
+        cor_dict_mask = select_text_from_LDA_results(search_results, searchfilename, search_var, lda_results)
+
+        result = pd.DataFrame.from_dict(cor_dict_mask, orient='index')
+        result['cord_uid'] = result.index
+        path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_2/search_results/'
+        result.to_csv(path + 'test_selected.csv')
+
+        sr = BasicSearch('wear mask', 'abstract')
+        test_collection = sr.load_data(filename)
+        result = pd.read_csv(self.path2 + self.result)
+
+        if 'cosine_similarity' in result.columns:
+            sort_df = result.sort_values(by=['cosine_similarity'], ascending=[False])
+        else:
+            sort_df = result.sort_values(by=['cos_similarity'], ascending=[False])
+
+        #df.sort_values(['age', 'grade'], ascending=[True, False])
+        result = sort_df
+        
+        result.to_csv(self.path + 'temp_eva.csv')
+        size = result.shape[0]
+
+        file_exists = os.path.isfile(self.path + '/result/evaluation_k_{}.csv'.format(self.keyword))
+        f = open(self.path + '/result/evaluation_k_{}.csv'.format(self.keyword), 'a')
+        writer_top = csv.writer(f, delimiter=',', quoting=csv.QUOTE_MINIMAL)
+        if not file_exists:
+            writer_top.writerow(['k'] + ['report'] + ['time'])
+
+        plot_precision = []
+        plot_recall = []
+        f1 = []
+        k_l = []
+        for k in range(1, size+1):
+            report = self.evaluation_k(result, k, test_collection)
+
+            f = open(self.path + '/result/evaluation_k_{}.csv'.format(self.keyword), 'a')
+            result_row = [[k, pd.DataFrame(report), str(datetime.datetime.now())]]
+            writer_top.writerows(result_row)
+
+            f.close()
+            plot_precision.append(report['macro avg']['precision'])
+            plot_recall.append(report['macro avg']['recall'])
+            f1.append(report['macro avg']['f1-score'])
+            k_l.append(k)
+
+        plot_result = pd.DataFrame(list(zip(k_l, plot_precision, plot_recall, f1)))
+        plot_result.rename(columns={plot_result.columns[1]: "precision"}, inplace=True)
+        plot_result.rename(columns={plot_result.columns[0]: "k"}, inplace=True)
+        plot_result.rename(columns={plot_result.columns[2]: "recall"}, inplace=True)
+        plot_result.rename(columns={plot_result.columns[3]: "f1_score"}, inplace=True)
+        plot_result.to_csv(self.path + 'result/evaluation_plot_{}_{}.csv'.format(self.keyword, datatype))
 
         return plot_result
 
+def basic_search(path, keywords, outputname):
+    """Get tfidf search result """
 
+    sr = BasicSearch(keywords, 'abstract')
+    ps = PorterStemmer()
 
-path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_scripts/'
-eva = Evaluation('test_selected.csv', 'mask2')
-plot_result = eva.evaluation('test_collection/labels/test_collection_wear_mask.csv')
+    test_collection = sr.load_data('test_collection.csv')
+    #simple process, stemming
+    test_collection['abstract'] = test_collection['abstract'].str.split(" ").apply(lambda x: [ps.stem(y) for y in x]) 
+    test_collection['abstract'] = test_collection['abstract'].apply(lambda x: [' '.join(x)]) 
+    test_collection['abstract'] = test_collection['abstract'].str[0]
 
+    search_query_weights, tfidf_weights_matrix = sr.tf_idf(sr.search_keys, test_collection, 'abstract')
+    similarity_list = sr.cos_similarity(search_query_weights, tfidf_weights_matrix)
 
+    #here we obtain cosine similarity > 0
+    basic_search_result = sr.most_similar(test_collection, similarity_list)
+    basic_search_result.to_csv(sr.path + 'search_results/basic_search_{}.csv'.format(outputname))
 
-# we need a graph for the results, we'll plot it with R
+    return basic_search_result
 
-# we also need a tfidf evaluation =
+def basic_search_by_word(keywords, outputname):
+        """Basic search by matching keywords, no tfidf  """
+        path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_2/'
+        search_results = []
+        for word in keywords.split():
+            #print(word)
+            basic_search_file = basic_search(path, word, outputname)
+            search_results.append(basic_search_file)
+        all_search = pd.concat(search_results)
+        all_search = all_search.drop_duplicates(subset='cord_uid', keep="last")
+        all_search.to_csv(path + 'search_results/basic_search_{}.csv'.format(outputname))
+        
+
 
 
 # sr = BasicSearch('wear mask', 'abstract')
 # test_collection = sr.load_data('test_collection.csv')
-# result = pd.read_csv(eva.path + eva.result)
-# sort_df = result.sort_values(by=['cosine_similarity'], ascending=False)
-# report = eva.evaluation_k(sort_df, 1, test_collection)
+
+# ## Question 1: Is wearing mask an effective way to control pandemic?
+
+# path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_scripts/'
+# #basic_search_file = basic_search(path, 'wear mask', 'wear_mask')#keywords, outputname
+# #scores_best_mask = selected_best_LDA(path, 'search_results/basic_search_wear_mask.csv', 'wear mask', 'abstract', 20)
+
+# basic_search_by_word('wear mask', 'wear_mask')
+# # run LDA
+# scores_best_mask = selected_best_LDA(path, 'search_results/basic_search_wear_mask.csv', 'abstract', 20)
+
+if __name__ == "__main__":
+
+
+    path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_scripts/'
+    basic_search_file = basic_search(path, 'wear mask', 'wear_mask')#keywords, outputname
+    scores_best_mask = selected_best_LDA(path, 'search_results/basic_search_wear_mask.csv', 'abstract', 15)
+
+    # # get evaluation for topic search
+    # path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_scripts/'
+    eva = Evaluation('/search_results/test_selected.csv', 'mask_stem') #evaluation, test_selected.csv is result of the retrieval system
+    # test collection file generated with test_collection, evaluate the top x entries
+    #intermediate files, temp_eva
+    #plot_result, result = eva.evaluation(scores_best_mask, 'search_results/basic_search_wear_mask.csv', 'mask', 'abstract','test_collection/labels/test_collection_mask_relabel.csv', 'topic', [2,14,0,8,13])
+
+    plot_result, result = eva.evaluation(scores_best_mask, 'search_results/basic_search_wear_mask.csv', 'mask', 'abstract','test_collection/labels/test_collection_mask_relabel.csv', 'topic', [0,2,8,14,15])
+
+    # get evaluation for tfidf search ********************************************
+    eva = Evaluation('search_results/basic_search_wear_mask.csv', 'mask_tfidf') #evaluation, filename, test_selected.csv is result of the retrieval system
+    plot_result = eva.evaluation_tfidf('test_collection/labels/test_collection_mask_relabel.csv', 'tfidf')
+
+    # now we check which one we miss
+    path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_2/'
+    annotation = pd.read_csv(path + 'annotation/mask_relabel.csv')
+    ranked_file = pd.read_csv(path + 'temp_eva_wear_mask.csv', encoding="ISO-8859-1", engine='python')
+    check_result = ranked_file.merge(annotation, on = 'textid', how = 'outer')
+    check_result.to_csv(path + 'check_result.csv')
+
+    # The advantage of the topic search is to be able to group topics despite of matching, we should apply topic not on top of tfidf 
+    # retrieve result without tfidf ranking 
+
+    basic_search_by_word('wear mask', 'wear_mask')
+    # run LDA
+    path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_scripts/'
+    scores_best_mask = selected_best_LDA(path, 'search_results/basic_search_wear_mask.csv', 'abstract', 25)
+   
+    #cor_dict_mask.update(cor_dict_mask3)
+    # cor_dict_df = pd.DataFrame.from_dict(cor_dict_mask, orient='index')
+    # path2 = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_2/search_results/'
+    # cor_dict_df.to_csv(path2 + 'test_selected.csv')
+
+    path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_scripts/'
+    eva = Evaluation('/search_results/test_selected.csv', 'mask_stem') #evaluation, test_selected.csv is result of the retrieval system
+
+    plot_result, result = eva.evaluation(scores_best_mask, 'search_results/basic_search_wear_mask.csv', 'mask', 'abstract', 'test_collection/labels/test_collection_mask_relabel.csv', 'topic', [8, 1, 3])
+
+    # use lda again on the importance sentences in the selected doc to see if can further identify stance 
+
+    # further eliminate topics, call this system FAB fact-check academic paper boost
 
 
 
 
 
-
-
-
-# # # We observe topic No. 14 is most relevant to public wearing mask, we can select multiple topics
-# cor_dict_mask = select_text_from_LDA_results('mask', 'abstract', scores_best_mask, 9)
-
-
-
-# # topic number 1， 5 is most relevant to public wearing mask
-# # which topic do you think is most relevant to your search
-# cor_dict_mask = select_text_from_LDA_results('mask', 'abstract', scores_best_mask, 13)
-# print ("There are {} abstracts selected". format(len(cor_dict_mask)))
-# cor_dict_mask2 = select_text_from_LDA_results('mask', 'abstract', scores_best_mask, 1)
-# print ("There are {} abstracts selected". format(len(cor_dict_mask2)))
-# cor_dict_mask.update(cor_dict_mask2)
-# len(cor_dict_mask)
-
-
-# # In[98]:
-
-
-# # extract relevant sentences  #search keywords can be a list
-# sel_sentence_mask = extract_relevant_sentences(cor_dict_mask, ['mask'])
-# sel_sentence_df_mask = store_extract_sentences(sel_sentence_mask, 'mask')
-
-
-# In[99]:
-
-
-# #read extracted article
-# sel_sentence_df_mask.head(10)
-
-
-# # In[93]:
-
-
-# def matching_labels(file1, file2, topic_name):
-#     path = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_2/annotation/'
-#     path2 = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_2/search_results/'
-#     incu1 = pd.read_csv(path + file1)
-#     incu2 = pd.read_csv(path2 + file2)
-
-#     incu1.rename(columns={incu1.columns[0]: "textid" }, inplace = True)
-#     incu2.rename(columns={incu2.columns[0]: "textid" }, inplace = True)
-#     incu = incu1.merge(incu2, on ='textid', how='right')
-#     incu.to_csv(path2 + '{}_annotation.csv'.format(topic_name))
-#     print(incu.shape)
-    
-# matching_labels('wear_mask.csv', 'search_results_mask.csv', 'mask')
 
 
 # # ### Annotation guidline for question 1

@@ -34,18 +34,24 @@ class MetaData:
         mydict = lambda: defaultdict(mydict)
         meta_data_dict = mydict()
 
-        if 'cos_similarity' in self.meta_data.columns:
+        if ('cos_similarity' in self.meta_data.columns) & ('abstract' in self.meta_data.columns):
             for cord_uid, abstract, title, sha, cos in zip(self.meta_data['cord_uid'], self.meta_data['abstract'], self.meta_data['title'], self.meta_data['sha'], self.meta_data['cos_similarity']):
                 meta_data_dict[cord_uid]['title'] = title
                 meta_data_dict[cord_uid]['abstract'] = abstract
                 meta_data_dict[cord_uid]['sha'] = sha
                 meta_data_dict[cord_uid]['cos_similarity'] = cos
-
-        else: 
+ 
+        elif ('abstract' in self.meta_data.columns): 
             for cord_uid, abstract, title, sha in zip(self.meta_data['cord_uid'], self.meta_data['abstract'], self.meta_data['title'], self.meta_data['sha']):
                 meta_data_dict[cord_uid]['title'] = title
                 meta_data_dict[cord_uid]['abstract'] = abstract
                 meta_data_dict[cord_uid]['sha'] = sha
+        else:
+            for cord_uid, abstract, title, sha in zip(self.meta_data['cord_uid'], self.meta_data['processed_text'], self.meta_data['title'], self.meta_data['sha']):
+                meta_data_dict[cord_uid]['title'] = title
+                meta_data_dict[cord_uid]['processed_text'] = abstract
+                meta_data_dict[cord_uid]['sha'] = sha
+
 
         return meta_data_dict
 
@@ -82,6 +88,29 @@ class ExtractText:
         mydict = lambda: defaultdict(mydict)
         cleaned = mydict()
         # check if there's cosine similarity, we need to include it
+        for k, v in self.metadata.items():
+            sent = v[self.variable]
+            sent = str(sent)
+            if 'cos_similarity' in self.metadata[list(self.metadata.keys())[0]].keys():   
+                cleaned[k]['processed_text'] = sent
+                cleaned[k]['sha'] = v['sha']
+                cleaned[k]['title'] = v['title']
+                cleaned[k]['cos_similarity'] = v['cos_similarity']
+
+            else:
+                cleaned[k]['processed_text'] = sent
+                cleaned[k]['sha'] = v['sha']
+                cleaned[k]['title'] = v['title']
+
+        return cleaned
+
+   
+
+    def very_simple_preprocess_stem(self):
+        """Simple text process: lower case only. """
+        mydict = lambda: defaultdict(mydict)
+        cleaned = mydict()
+        # check if there's cosine similarity, we need to include it
         if 'cos_similarity' in self.metadata[list(self.metadata.keys())[0]].keys():
             for k, v in self.metadata.items():
                 sent = v[self.variable]
@@ -93,12 +122,12 @@ class ExtractText:
 
         else:
             for k, v in self.metadata.items():
-                cleaned[k]['processed_text'] = sent
+                sent = v[self.variable]
+                cleaned[k]['processed_text'] = ps.stem(str(sent).split())
                 cleaned[k]['sha'] = v['sha']
                 cleaned[k]['title'] = v['title']
 
         return cleaned
-     
 
     def extract_w_keywords(self):
         """Select content with keywords."""
@@ -194,6 +223,28 @@ class ExtractText:
             verbs = ' '.join(ps.stem(str(v)) for v in doc if v.pos_ is 'VERB').split()
             adj = ' '.join(str(v) for v in doc if v.pos_ is 'ADJ').split()
             all_w = nouns + verbs + adj
+            all_extracted[k] = all_w
+      
+        return all_extracted
+
+    def preprocess_cluster_sentence(self, text):
+        """get noun trunks for the lda model,
+        change noun and verb part to decide what
+        you want to use as input for LDA"""
+        ps = PorterStemmer()
+      
+        #find nound trunks
+        nlp = en_core_web_sm.load()
+        all_extracted = {}
+        for k, v in text.items():
+            #v = v.replace('incubation period', 'incubation_period')
+            doc = nlp(v['processed_text'])
+            nouns = ' '.join(ps.stem(str(v)) for v in doc if v.pos_ is 'NOUN').split()
+            verbs = ' '.join(ps.stem(str(v)) for v in doc if v.pos_ is 'VERB').split()
+            adj = ' '.join(str(v) for v in doc if v.pos_ is 'ADJ').split()
+            adv = ' '.join(str(v) for v in doc if v.pos_ is 'ADV').split()
+            part = ' '.join(str(v) for v in doc if v.pos_ is 'PART').split()
+            all_w = nouns + verbs + adj + adv + part
             all_extracted[k] = all_w
       
         return all_extracted

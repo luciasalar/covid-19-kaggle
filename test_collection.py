@@ -33,7 +33,7 @@ def extract_relevant_sentences2(cor_dict, search_keywords, filter_title=None):
 
     mydict = lambda: defaultdict(mydict)
     sel_sentence = mydict()
-    filter_w = ['covid19','ncov','2019-ncov','covid-19','sars-cov','wuhan']
+    filter_w = ['covid19','2019-ncov','covid-19','sars-cov','wuhan']
     
     for k, v in cor_dict.items():
         keyword_sentence = []
@@ -45,7 +45,7 @@ def extract_relevant_sentences2(cor_dict, search_keywords, filter_title=None):
             if keyword_sum > 0:
                 keyword_sentence.append(sentence)         
 
-        # store results
+        # if abstract doesnt contain keywords, skip
         if not keyword_sentence:
             pass
         
@@ -54,6 +54,7 @@ def extract_relevant_sentences2(cor_dict, search_keywords, filter_title=None):
                 title = v['title'].lower().translate(str.maketrans('', '', string.punctuation))
                 abstract = v['processed_text'].lower().translate(str.maketrans('', '', string.punctuation))
                 if (f in title) or (f in abstract):
+                    print(f)
                     sel_sentence[k]['sentences'] = keyword_sentence
                     sel_sentence[k]['sha'] = v['sha']
                     sel_sentence[k]['title'] = v['title'] 
@@ -74,7 +75,7 @@ def test_collection(keyword_l, varname, search_keywords, filter_title1=None):
     #process text and extract text with keywords
     m = MetaData('metadata.csv')
     metaDict = m.data_dict()
-    et = ExtractText(metaDict, 'keyword_l', varname)
+    et = ExtractText(metaDict, keyword_l, varname)
     text1 = et.extract_w_keywords_punc_multiplew(keyword_l)
 
     # filter out titles do not contain keywords
@@ -92,28 +93,38 @@ def matching_labels(annotation, test_collection, topic_name):
     path2 = '/afs/inf.ed.ac.uk/user/s16/s1690903/share/cov19_2/test_collection/'
     incu1 = pd.read_csv(path + annotation, encoding="ISO-8859-1", engine='python')
     incu2 = pd.read_csv(path2 + test_collection, encoding="ISO-8859-1", engine='python')
+    
+    if 'textid' in incu1.columns:
+        incu = incu1.merge(incu2, on='textid', how='right')
+        incu.to_csv(path2 + '{}_relabel.csv'.format(topic_name))
 
-    incu1.rename(columns={incu1.columns[0]: "textid" }, inplace = True)
-    incu2.rename(columns={incu2.columns[0]: "textid" }, inplace = True)
-    incu = incu1.merge(incu2, on ='textid', how='right')
-    incu.to_csv(path2 + '{}_relabel.csv'.format(topic_name))
-    #print(incu.shape)
+    else:
+        incu1.rename(columns={incu1.columns[0]: "textid" }, inplace = True)
+        incu2.rename(columns={incu2.columns[0]: "textid" }, inplace = True)
+        incu = incu1.merge(incu2, on ='textid', how='right')
+        incu.to_csv(path2 + '{}_relabel.csv'.format(topic_name))
+ 
     return incu
+
 
 
 if __name__ == "__main__":
     # collect abstracts that mention summer
-    test_collection('season', 'abstract', ['summer'], 'filter')
+    test_collection('season', 'abstract', ['summer'])
     # collect abstracts that mention mask
-    test_collection('mask', 'abstract', ['mask'], 'filter')
+    test_collection('mask', 'abstract', ['mask']) #here we dont select titles contain covid because we want to include influenza and so on
     # we only want sentences contain 'day' in incubation period related abstracts
-    test_collection('incubation', 'abstract', ['day'], 'title')
+    test_collection('incubation period', 'abstract', ['incubation period'], 'title')
     # collect abstracts mention asymptomatic and contagious
-    test_collection(['asymptomatic', 'contagious'], 'abstract', ['asymptomatic'], 'title')
+    test_collection(['asymptomatic'], 'abstract', ['contagious'], 'title')
 
-    # matching existing labels with test collection
+    test_collection(['antibody'], 'abstract', ['immune', 'recovered', 'antibody', 'level'], 'title')
 
-    relabel = matching_labels('wear_mask.csv', 'test_mask.csv', 'mask')
+    # matching existing labels with test collection to generate relabel file
+
+    relabel = matching_labels('mask_relabel.csv', 'test_mask.csv', 'mask')
+
+    relabel = matching_labels('seasonality.csv', 'test_summer.csv', 'season')
 
 
 

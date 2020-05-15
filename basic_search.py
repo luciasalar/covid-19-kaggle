@@ -19,7 +19,7 @@ class BasicSearch:
 
     def load_data(self):
         """Load meta data."""
-        dataframe = pd.read_csv(self.path + 'metadata.csv')
+        dataframe = pd.read_csv(self.path + 'test_collection.csv')
         return dataframe
 
     def tf_idf(self, search_keys, dataframe, varname):
@@ -137,11 +137,10 @@ class BasicSearch:
         return sel_sentence, sel_sentence_df
 
 
+if __name__ == "__main__":
 
-
-
-s = BasicSearch('wear mask', 'abstract') #enter query
-result = s.extract_relevant_sentences(['mask'])
+    s = BasicSearch('wear mask', 'abstract') #enter query
+    result = s.extract_relevant_sentences(['mask'])
 
 
 # df = s.load_data()

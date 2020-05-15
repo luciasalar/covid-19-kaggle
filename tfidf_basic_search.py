@@ -43,6 +43,22 @@ class BasicSearch:
         dataframe = pd.read_csv(self.path + filename)
         return dataframe
 
+    def very_simple_preprocess(self, data):
+        """Simple text process: lower case only. """
+        
+
+        mydict = lambda: defaultdict(mydict)
+        cleaned = mydict()
+        # stem words
+        for k, v in data.items():
+            sent = v[self.variable]
+            sent = str(sent)
+            cleaned[k]['processed_text'] = sent
+            cleaned[k]['sha'] = v['sha']
+            cleaned[k]['title'] = v['title']
+
+        return cleaned
+
     def tf_idf(self, search_keys, dataframe, varname):
         """Compute search query weights and tfidf weights."""
         tfidf_vectorizer = TfidfVectorizer()
@@ -62,6 +78,14 @@ class BasicSearch:
         """Return entries with cosine similarity > 0 """
         dataframe['cos_similarity'] = similarity_list
         dataframe = dataframe.loc[dataframe['cos_similarity'] > 0]
+        sort_df = dataframe.sort_values(by=['cos_similarity'], ascending=False)
+        
+        return sort_df
+
+    def get_similarity(self, dataframe, similarity_list):
+        """Return entries with cosine similarity > 0 """
+        dataframe['cos_similarity'] = similarity_list
+        #dataframe = dataframe.loc[dataframe['cos_similarity'] > 0]
         sort_df = dataframe.sort_values(by=['cos_similarity'], ascending=False)
         
         return sort_df
