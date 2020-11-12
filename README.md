@@ -1,16 +1,34 @@
 # Fighting COVID-19 Infodemics 
 ## Project Design
 
-Knowledge gap between public and specialists and uncertainties are an important factors that drive pandemic anxiety, in this task, we will examine papers that discuss some of the controversial topics that contribute to rumours and anxiety
+Knowledge gap between public and specialists and uncertainties are an important factors that drive pandemic anxiety. The general public mainly gain information about the pandmic from social media platforms or simply by search engine. Information from reliable sources is often ranked at the top by search engines. However, at the begining of a pandemic, government and institutes have little information about the virus, therefore, guidance about protect measure and information about the virus was confusing. The public would benefit from retrieving information from academic papers. However, searching information from academic paper is not a trivial task for someone without a domain specific knowledge. It is also an intimidating task for someone without domain knowledge to summarize the result by reading through dozens of papers.
 
-Here I develop a search system to extract sentences from abstracts that are relevant to a question. The questions are associated with rumour and uncertain information circulating in the public. We can try different questions in here, and an important part is to evaluate the search system with human annotation baseline if we want to push forward this work as a paper. 
+Here I develop a search system to extract sentences from abstracts that are relevant to a COVID question. The example questions we used in here are associated with rumour and uncertain information circulating in the public. 
 
-### Step 1:
-The search system first extract abstract contains a keyword (e.g. ‘mask’), then we use LDA to group the abstract topics. We identify a topic that is  most relevant to the question and we extract abstracts that contain the target topic. The system sentences that contain the keyword from the relevant abstracts. The standard apporach of a search system is to used TFIDF to rank documents, here we use LDA topic modeling on nouns, verbs and adjectives of the abstract. Users can decide the relevant information when they know what are the most frequent keywords in each topic. For some queries, users want to identify articles for covid-19 only. Therefore, users are opt to add title filer for different queries in our system.
+Q1: Is wearing mask an effective means to control community spread of the pandemic COVID-19? Governments from Asian countries enforce mask wearing in public areas and believe this is an effective way to reduce the risk of infection. By contrast, governments from Europe and U.S. advocate that there is little evidence that wearing mask is effective in controlling the pandemic, and healthy people in those countries are reluctant to wear masks in their everyday lives. 
 
-The benefit of this approach is that when we want to know the relevant content for a question, we don't know what are the keywords in the article are more relevant to the question we ask, because the users are usually not farmiliar with academic papers. In our system, the topic keywords serve as prime for the query in the next step for extracting sentences in the abstract.
+Q2: Is 14-day's self-quarantine period enough to ensure no infectiousness of the people quarantined? This question concerns the incubation period of COVID-19. Many governments in the world use 14 days as the maximum self-quarantine period to check if anyone who has a visiting history to the outbreak places or a contacting history with identified patients. However, in some social media, there are rumors saying that the incubation period of COVID-19 could be longer than 14 days. 
 
-### Step 2:
+Q3: Are asymptomatic patients infectious to others? This is the most relevant question to the pandemic anxiety. Clarifying this question is critical to the general public health and decisions on whether conducting the virus check only on people showing symptoms or on the whole population (if possible)
+
+Q4: Is the spread of COVID-19 seasonally sensitive?} There is a widely spread rumor claiming that the virus will disappear in the summer, like previous coronavirus outbreaks like SARS or MERS. Clarifying this issue can avoid relaxing the vigilance on the virus too early. 
+
+
+## Methods:
+###  The search system:
+The search system first extract abstract contains a keyword (e.g. ‘mask’), then we use LDA to group the abstract topics. The input of the LDA topic modeling are nouns, verbs and adjectives of the abstract. Next, we identify a topic that is most relevant to the question we asked and we extract the abstracts that contain the target topic. Later, the system retrieves sentences that contain the keyword from the selected abstracts. Sentences retrieved from one abstract are grouped as a document. Finally, we use TFIDF to rank these documents.
+
+The process can be described as:
+
+(1) keyword searching abstracts -> (2) extract abstract topics with LDA -> (3) select abstracts with relevant topics -> (3) extract key sentences from selected abstracts -> (4) rank the key sentences.
+
+Users can custumize their search in step 3. For some queries, users want to identify articles for a specific topic (e.g. covid-19). In this case users are opt to add title filer for different queries in our system.
+
+The benefit of this approach is that when we are not familar with the jagons in an academic field, the search system returns topics (step 3) that primes you for a more accurate search.
+
+
+
+### System Evaluation:
 We manually annotate the key sentences to identify the stance of the result sentences and whether these sentences are relevant to the question asked.
 
 
